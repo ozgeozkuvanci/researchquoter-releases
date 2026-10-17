@@ -1,0 +1,35 @@
+name: Publish release
+
+# Release files are pushed to a "staging/v<version>" branch (the installer split into parts small
+# enough for git). This joins the parts, publishes them as a GitHub release, and deletes the branch.
+on:
+  push:
+    branches: ["staging/v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Join installer parts
+        run: |
+          cd release
+          for first in *.part00; do
+            name="${first%.part00}"
+            cat "$name".part* > "$name"
+            rm "$name".part*
+          done
+          sha512sum ./* 
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME#staging/}"
+          gh release create "$tag" release/* --repo "$GITHUB_REPOSITORY" --target main --title "Research Workspace ${tag#v}" --notes-file NOTES.md
+      - name: Remove staging branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME"
